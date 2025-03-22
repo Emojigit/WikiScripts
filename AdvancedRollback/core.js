@@ -32,6 +32,7 @@ $.when(mw.loader.using([
         'rollback',
         'colon-separator',
         'cancel',
+        'summary-preview',
     ]))
     .then(() => {
         const api = new mw.Api();
@@ -168,6 +169,12 @@ $.when(mw.loader.using([
                 ],
             });
 
+            this.summaryPreviewSpan = $('<span id="advancedrollback-summary-preview">');
+
+            const summaryPreviewShell = $('<span id="advancedrollback-summary-preview-shell">')
+                .append(mw.message('summary-preview').parseDom())
+                .append(this.summaryPreviewSpan);
+
             fieldset.addItems([
                 new OO.ui.FieldLayout(this.intentionSelection, {
                     align: 'top'
@@ -185,9 +192,11 @@ $.when(mw.loader.using([
             ]);
 
             this.panel.$element.append(fieldset.$element);
+            this.panel.$element.append(summaryPreviewShell);
             this.$body.append(this.panel.$element);
 
             this.summaryDropdown.on('change', this.onSummaryDropdownChange.bind(this));
+            this.summaryInput.on('change', this.onSummaryInputChange.bind(this));
         };
 
         rollbackDialog.prototype.getSetupProcess = function (data) {
@@ -207,6 +216,35 @@ $.when(mw.loader.using([
             } else {
                 this.summaryInput.setValue(window.AdvancedRollbackSummaryPresets[value].text || '');
             }
+            this.updateSummaryPreview();
+        };
+
+        rollbackDialog.prototype.updateSummaryPreview = function () {
+            delete this.updateSummaryPreviewTimeout;
+            const data = this.data;
+            const summary = this.summaryInput.getValue();
+            if (this.lastHandledSummary === summary)
+                return;
+            this.lastHandledSummary = summary;
+            this.summaryPreviewSpan.text('[...]');
+            api.get({
+                action: 'parse',
+                title: data.pagetitle,
+                text: '',
+                summary: summary,
+            }).then((rtnData) => {
+                console.log(rtnData);
+                const parsedHTML = rtnData.parse.parsedsummary["*"];
+                this.summaryPreviewSpan.html(parsedHTML);
+                this.updateSize();
+            });
+        };
+
+        rollbackDialog.prototype.onSummaryInputChange = function () {
+            if (this.updateSummaryPreviewTimeout)
+                clearTimeout(this.updateSummaryPreviewTimeout);
+            this.summaryPreviewSpan.text('[...]');
+            this.updateSummaryPreviewTimeout = setTimeout(this.updateSummaryPreview.bind(this), 500);
         };
 
         rollbackDialog.prototype.getActionProcess = function (action) {
